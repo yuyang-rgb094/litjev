@@ -1,0 +1,402 @@
+\documentclass[11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\geometry{margin=1in}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  citecolor=blue!50!black,
+  urlcolor=blue!50!black
+}
+
+\title{LitJev: A Calibrated Single-Pass Decision Model for Academic Manuscript Screening}
+\author{\textbf{Replace with author metadata before submission}}
+\date{arXiv preprint, October 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Evaluating academic manuscripts with large generative models is expensive,
+slow, and produces free-form assessments that are difficult for software
+agents to consume. This paper presents LitJev, a 4B-parameter single-pass
+decision model that maps a manuscript title and abstract to twelve typed
+decisions, each with a calibrated probability, without autoregressive
+generation or growing KV-cache. The model is trained with three groups of
+supervision: craft questions use teacher distillation as a cold-start signal,
+value questions use long-term academic outcomes and knowledge-manifold
+trajectory labels rather than current large-model consensus, and
+integrity/coverage questions use retraction, manipulation-cluster,
+programmatic-perturbation, and out-of-domain signals. On a frozen,
+year-held-out in-domain benchmark, eight of twelve question heads achieve AUROC
+above 0.95, eleven of twelve achieve post-hoc expected calibration error at or
+below 0.026, and the explicit domain-coverage head reaches AUROC 0.996. An
+exploratory comparison shows that the specialized model produces lower Brier
+score than zero-shot general-purpose models on the same typed propositions,
+while several rare-class value tasks remain limited by supervision. We
+intentionally do not optimize the long-term-impact rank-correlation beyond a
+regression gate, because citation alignment is not the same as evidence that
+the model can recognize silent frontiers.
+\end{abstract}
+
+\section{Introduction}
+
+Scientific publishing increasingly depends on preliminary screening under
+resource constraints. A complete expert review is expensive and slow, while a
+generative LLM review is faster but has several limitations for
+machine-to-machine workflows: it is costly at scale, it emits free-form prose
+that downstream systems must parse, it is often uncertain in ways that are not
+expressed as usable probabilities, and, if used as a value judge, it tends to
+reproduce current mainstream consensus.
+
+LitJev is a deliberate System-1 counterpart to generative System-2 review. It
+is not a reviewer, a chatbot, or a journal decision system. It is a
+task-specific decision model that produces a fixed vector of per-question
+probabilities in one forward pass. The contributions of this work are:
+
+\begin{enumerate}
+  \item a twelve-question typed decision schema spanning craft, value,
+        integrity, and domain-coverage dimensions;
+  \item a three-signal supervision design in which only time-invariant craft
+        dimensions are teacher-distilled, while value dimensions use academic
+        outcomes and trajectory geometry instead of current LLM opinion;
+  \item a 4B-parameter cross-encoder implementation with soft-label training
+        and a pair-ranking objective for long-term-impact thresholds;
+  \item a frozen in-domain benchmark with explicit calibration and OOD
+        abstention;
+  \item an exploratory zero-shot comparison with two general-purpose models,
+        framed as evidence about task specialization rather than a superiority
+        claim.
+\end{enumerate}
+
+\section{Related Work}
+
+\paragraph{System-1 decision models.}
+Jev introduced the idea of training models to produce typed decisions and
+calibrated probabilities instead of generating text. OpenJev and mini-jev
+showed that compact cross-encoders can approximate this downstream shape for
+benchmark-style inference. RLCD has not been fully publicly disclosed; we
+therefore follow RLCR only as a conceptual reference and do not claim to
+reproduce RLCD.
+
+\paragraph{Outcome-based review.}
+ReviewGuard aligns review signals toward future citation impact. APRES searches
+for rubrics that predict future citations. These systems demonstrate that
+long-term outcome signals can be learned, but they also measure
+consensus-compatible ranking signals. Our design keeps these signals for
+instrumented monitoring but does not make them the primary target of all value
+supervision.
+
+\paragraph{Knowledge manifold learning and silent frontiers.}
+KML models citation trajectories as a graph manifold and defines source nodes,
+silent-frontier trajectories, and manipulation clusters. This family of signals
+is used for value and integrity supervision because it explicitly addresses
+papers whose early citation patterns do not yet reflect long-term influence.
+
+\paragraph{Calibration and abstention.}
+Temperature scaling and isotonic regression are standard post-hoc calibration
+tools. Selective prediction and out-of-domain detection are relevant for models
+that should abstain outside their training community. We implement an
+\texttt{in\_coverage} question head rather than a generative refusal.
+
+\section{Task Formulation}
+
+LitJev receives a structured paper state. The current snapshot uses only title
+and abstract. The output is a vector
+\(
+  \mathbf{y}=[p_1,\dots,p_{12}],\quad p_i\in[0,1].
+\)
+
+The twelve question heads are grouped as shown in
+Table~\ref{tab:schema}.
+
+\begin{table}[t]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+Group & Question & Output \\
+\midrule
+Craft & \texttt{clarity} & choice posterior \\
+Craft & \texttt{method\_type} & choice posterior \\
+Craft & \texttt{rigor} & 1--5 threshold set \\
+Craft & \texttt{reproducibility} & 1--5 threshold set \\
+Craft & \texttt{experiments\_support} & predicate probability \\
+Value & \texttt{long\_term\_impact} & 1--5 threshold set \\
+Value & \texttt{expert\_accept} & predicate probability \\
+Value & \texttt{silent\_source\_potential} & predicate probability \\
+Value & \texttt{paradigm\_trajectory} & five-class posterior \\
+Integrity & \texttt{citation\_chain\_clean} & predicate probability \\
+Integrity & \texttt{misconduct\_signal} & predicate probability \\
+Coverage & \texttt{in\_coverage} & predicate probability \\
+\bottomrule
+\end{tabular}
+\caption{Question heads of the LitJev decision schema.}
+\label{tab:schema}
+\end{table}
+
+The model does not output a total score and does not rank papers against one
+another. Each probability is exposed independently so that a downstream agent
+can enforce its own decision rules.
+
+\section{Supervision Design}
+
+\subsection{Craft dimensions}
+
+Clarity, method type, rigor, reproducibility, and experimental support are
+treated as time-invariant properties. They are cheap for a strong teacher to
+estimate and are not the main source of value bias. We produce soft labels by
+prompting a commercial teacher with five reviewer personas per paper and taking
+the vote distribution.
+
+\subsection{Value dimensions}
+
+Value labels are not teacher-distilled. \texttt{long\_term\_impact} is derived
+from citation counts normalized within venue--year cohorts.
+\texttt{expert\_accept} is a human decision anchor.
+\texttt{silent\_source\_potential} and \texttt{paradigm\_trajectory} use KML
+source and trajectory criteria.
+
+The reason is conceptual: frontier ideas can be systematically misestimated by
+consensus models during the silent period. Distilling a general-purpose LLM for
+these questions would therefore train on the wrong direction for a key
+differentiator.
+
+\subsection{Integrity and coverage}
+
+Integrity labels combine retraction status, KML manipulation clusters, and
+programmatically perturbed negatives. The coverage question is trained with
+in-domain ML-community papers as positives and twelve OpenAlex scientific
+domains as negatives. It allows the model to express ``this input is outside my
+coverage'' as a first-class decision.
+
+\section{Data}
+
+\subsection{Sources}
+
+The main community corpus contains ICLR and NeurIPS submissions with decision
+metadata, augmented with OpenAlex citation information, Semantic Scholar
+matching, arXiv identifiers, and KML trajectory features. OOD negatives are
+sampled from mathematics, physics, chemistry, biology, medicine, economics,
+psychology, geology, materials science, sociology, history, and philosophy.
+
+\subsection{Pair construction}
+
+Each decision sample becomes one or more NLI-style premise--hypothesis pairs.
+Choice questions emit one pair per value. Score questions emit threshold
+propositions (``at least $k$''). Binary predicates emit one proposition. A paper
+is the premise; a proposition is the hypothesis.
+
+\subsection{Final snapshot}
+
+\begin{table}[t]
+\centering
+\begin{tabular}{@{}lc@{}}
+\toprule
+Split & Pair count \\
+\midrule
+train & 268{,}039 \\
+validation & 137{,}987 \\
+test & 109{,}607 \\
+\midrule
+total & 515{,}633 \\
+\bottomrule
+\end{tabular}
+\caption{Final supervised snapshot.}
+\label{tab:data}
+\end{table}
+
+The test split is held out by year and is not used for model selection or
+calibration fitting. Calibration mappings are fit on validation only.
+
+\section{Model and Training}
+
+The model uses Qwen3.5-4B as a decoder trunk, takes the last token of the
+concatenated input, and maps the pooled representation to a two-way head. The
+positive-class logit is softmax-normalized into the decision probability.
+
+Training uses a soft cross-entropy loss against target probabilities and a
+RankNet-style pair loss for long-term-impact papers within the same
+venue--year cohort,
+\(
+  \mathcal{L}=\mathcal{L}_{\mathrm{CE}}+\lambda\mathcal{L}_{\mathrm{rank}}.
+\)
+The full parameter set is fine-tuned in bf16 with gradient checkpointing.
+Sortish length bucketing reduces padding. Checkpoints store optimizer and
+scheduler state for exact resumption.
+
+After training, each question is calibrated independently on validation using
+temperature scaling and isotonic regression. Final head outputs are
+monotonically remapped before use.
+
+\section{Evaluation}
+
+\subsection{Metrics}
+
+\begin{itemize}
+  \item \textbf{AUROC}: binary discrimination for predicate and threshold
+        questions.
+  \item \textbf{Brier}: squared error against the stored target probability.
+  \item \textbf{ECE}: ten-bin expected calibration error after post-hoc
+        calibration.
+  \item \(\rho_{\mathrm{LTI}}\): cohort-level Spearman correlation of per-paper
+        expected score.
+  \item \textbf{high\_impact\_rejected\_recall}: recovered high-impact rejected
+        manuscripts.
+\end{itemize}
+
+\subsection{Comparators}
+
+For an exploratory comparison, we evaluate GLM-5.3 and GLM-5.3-Flash on the
+same 192-pair stratified test sample with zero-shot prompting and JSON-encoded
+probabilities. The models are general-purpose and are not calibrated; the
+comparison is not intended to establish general capability.
+
+\section{Results}
+
+\subsection{Frozen held-out benchmark}
+
+\begin{table}[t]
+\centering
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Question & AUROC & \(n\) \\
+\midrule
+\texttt{citation\_chain\_clean} & 1.0000 & 1{,}590 \\
+\texttt{in\_coverage} & 0.9963 & 2{,}587 \\
+\texttt{method\_type} & 0.9893 & 24{,}670 \\
+\texttt{rigor} & 0.9887 & 19{,}736 \\
+\texttt{clarity} & 0.9803 & 14{,}802 \\
+\texttt{reproducibility} & 0.9756 & 19{,}736 \\
+\texttt{misconduct\_signal} & 0.9755 & 2{,}277 \\
+\texttt{paradigm\_trajectory} & 0.8780 & 8{,}235 \\
+\texttt{experiments\_support} & 0.7732 & 4{,}934 \\
+\texttt{silent\_source\_potential} & 0.7607 & 974 \\
+\texttt{expert\_accept} & 0.6966 & 3{,}794 \\
+\bottomrule
+\end{tabular}
+\caption{Frozen held-out test AUROC for eleven question heads.}
+\label{tab:auc}
+\end{table}
+
+\texttt{long\_term\_impact} reports per-paper rank calibration rather than a
+single AUROC. On the frozen test cohort,
+\(\rho_{\mathrm{LTI}}=0.4707\) with \(n=1{,}568\). We present this number as a
+regression baseline, not as the headline value capability.
+
+\subsection{Calibration}
+
+After isotonic calibration, ECE is at or below \(0.0261\) for eleven of twelve
+question heads. The exception is \texttt{silent\_source\_potential}, with ECE
+\(0.0595\).
+
+\subsection{Training lineage}
+
+\begin{table}[t]
+\centering
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Snapshot & Paradigm test & Silent source test & \(\rho_{\mathrm{LTI}}\) test \\
+\midrule
+v2 & 0.913 & 0.757 & 0.474 \\
+v3 & 0.857 & 0.762 & 0.470 \\
+v3.1 & 0.878 & 0.761 & 0.470 \\
+\bottomrule
+\end{tabular}
+\caption{Training lineage on the frozen test split.}
+\label{tab:lineage}
+\end{table}
+
+The v3.1 checkpoint recovers most of the paradigm-trajectory regression while
+preserving the silent-source value signal.
+
+\subsection{Exploratory GLM comparison}
+
+\begin{table}[t]
+\centering
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Model & Brier & Hard accuracy & MAE \\
+\midrule
+GLM-5.3 & 0.1475 & 0.7558 & 0.2736 \\
+GLM-5.3-Flash & 0.1578 & 0.7151 & 0.2956 \\
+LitJev v3.1 & 0.0766 & 0.8663 & 0.1298 \\
+\bottomrule
+\end{tabular}
+\caption{Paired zero-shot comparison, \(n=172\) valid pairs.}
+\label{tab:glm}
+\end{table}
+
+The comparison is at most preliminary evidence for task specialization and
+must not be read as a general-capability ranking.
+
+\section{Discussion}
+
+The main architectural value of LitJev is not a new model family but an
+explicit separation between signals. Craft dimensions may be teacher-supervised
+because they are time-invariant. Value dimensions require slow, structurally
+defined signals because consensus models are biased in the exact regime that a
+silent-frontier detector must handle.
+
+We deliberately avoid optimizing \(\rho_{\mathrm{LTI}}\) beyond a regression
+gate. Citation alignment is a useful instrumentation channel, but it is not
+identical to recognizing under-appreciated work, and optimizing it too strongly
+can push the model back toward mainstream consensus.
+
+\section{Limitations}
+
+\begin{itemize}
+  \item The model uses title and abstract only; full-text understanding is
+        future work.
+  \item The community benchmark is ICLR/NeurIPS-centric and is not a general
+        academic sample.
+  \item \texttt{silent\_source\_potential} and
+        \texttt{high\_impact\_rejected\_recall} have insufficient positive
+        supervision for decisive conclusions.
+  \item The GLM comparison is zero-shot, uncalibrated, and based on 172 paired
+        examples.
+  \item No serving-level latency or throughput benchmark is included.
+  \item The study does not perform multi-seed replications, bootstrap tests, or
+        a formal train/test contamination audit.
+  \item Coverage is not a substitute for robustness outside the trained
+        community.
+\end{itemize}
+
+\section{Conclusion}
+
+We introduced LitJev, a trained single-pass decision model for manuscript
+screening. It provides twelve independent calibrated decision heads and an
+explicit coverage signal. On an in-domain held-out benchmark it is strong on
+craft, integrity, and coverage tasks, while its rare value-class tasks remain
+data-limited. The model is therefore positioned as a rapid screening and
+calibration instrument, not as a replacement for expert review.
+
+\section*{Acknowledgements}
+
+We thank Dongbi Technology Data (Dongbi Data), the Chinese Academy of Sciences,
+and Professor Dengsheng Wu of Shenzhen University for foundational
+philosophical contributions to the principles of paper evaluation.
+
+\section*{References}
+
+\begin{thebibliography}{9}
+\bibitem{jev} TypeSafe AI. Jev: typed, calibrated decisions.
+\bibitem{openjev} OpenJev / mini-jev. Open reimplementation of a System-1 decision model.
+\bibitem{rlcr} RLCR. Reinforcement Learning for Calibrated Decisions. arXiv:2507.16806.
+\bibitem{reviewguard} ReviewGuard. Aligning review models with future citation outcomes. arXiv:2606.24892.
+\bibitem{apres} APRES. Rubric discovery for predictable future citations. arXiv:2603.03142.
+\bibitem{citation} Citation prediction is more learnable than review scores. arXiv:2503.05712.
+\bibitem{kml} Yu Yang. Knowledge Manifold Learning, 2026.
+\bibitem{qgt} QGT V2/V3. Preceding manifold-quality studies in the same project repository.
+\end{thebibliography}
+
+\end{document}
