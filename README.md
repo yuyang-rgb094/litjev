@@ -32,6 +32,18 @@ snapshot is `full-v3.1`.
 For a description of training, supervision design, benchmark, limitations, and
 results, see [`MODEL_CARD.md`](MODEL_CARD.md) and the paper under [`paper/`](paper/).
 
+### Download model weights
+
+The full `full-v3.1` base weights are distributed as assets in the GitHub
+`v3.1` release (the Git tree itself does not store the multi-GB weights):
+
+```bash
+bash download_model.sh ./model
+```
+
+The script downloads the release assets, reassembles the split first
+`safetensors` shard, and verifies all files against `SHA256SUMS`.
+
 ### Quick start
 
 ```bash
@@ -47,7 +59,8 @@ probability for the requested question.
 ### Repo layout
 
 ```text
-model/            base model shards, tokenizer, head_final.pt
+download_model.sh download and reassemble the release weights
+model/            local model weights (after download)
 paper/            manuscript in Markdown and LaTeX
 inference.py      minimal one-shot inference example
 MODEL_CARD.md     technical model card
@@ -74,6 +87,17 @@ LitJev 将论文标题和摘要映射为 12 个类型化判断，每个判断独
 训练、监督设计、评测基准、局限性与结果见 [`MODEL_CARD.md`](MODEL_CARD.md)，
 论文草稿见 [`paper/`](paper/)。
 
+### 下载模型权重
+
+完整 `full-v3.1` 基座权重通过 GitHub `v3.1` Release 资产发布，不放入 Git 提交历史：
+
+```bash
+bash download_model.sh ./model
+```
+
+脚本会下载 release 资产、合并被拆分的首个 `safetensors` 分片，并使用
+`SHA256SUMS` 校验全部文件。
+
 ### 快速开始
 
 ```bash
@@ -88,7 +112,8 @@ python inference.py --model-dir ./model --question in_coverage \
 ### 目录结构
 
 ```text
-model/            基座分片、tokenizer、head_final.pt
+download_model.sh 下载并重建 release 权重
+model/            本地模型权重（下载后生成）
 paper/            论文 Markdown 与 LaTeX
 inference.py      最小单次推理示例
 MODEL_CARD.md     技术模型卡
