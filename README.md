@@ -68,6 +68,7 @@ model/            local model weights (after download)
 paper/            manuscript in Markdown and LaTeX
 inference.py      minimal one-shot inference example
 MODEL_CARD.md     technical model card
+Handoff.md        project handoff and next-step roadmap
 ```
 
 ### License note
@@ -121,6 +122,7 @@ model/            本地模型权重（下载后生成）
 paper/            论文 Markdown 与 LaTeX
 inference.py      最小单次推理示例
 MODEL_CARD.md     技术模型卡
+Handoff.md        项目交接与后续路线图
 ```
 
 ### 许可说明
