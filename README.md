@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="assets/logo.png" alt="LitJev logo" width="220">
+</div>
+
 # LitJev
 
 **A calibrated, single-pass decision model for academic manuscript screening.**
