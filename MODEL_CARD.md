@@ -61,3 +61,17 @@ Post-hoc calibration: ECE <= 0.0261 for 11/12 heads; `silent_source_potential` E
 后校准结果：11/12 个 head 的 ECE <= 0.0261；`silent_source_potential` ECE = 0.0595。
 
 `long_term_impact` 使用 per-paper cohort Spearman rho = 0.4707；该指标仅作为回归基线记录，不作为优化目标。
+
+## License / 许可
+
+LitJev `full-v3.1` is a fine-tuned derivative of
+[Qwen/Qwen3.5-4B](https://www.modelscope.cn/models/Qwen/Qwen3.5-4B) (Apache License 2.0).
+**All model weights were modified** by supervised fine-tuning on the LitJev pair dataset
+(Apache-2.0 section 4(b) modification notice). Our added code and head weights are
+released under the MIT License. See [LICENSE](LICENSE), [LICENSE-base](LICENSE-base) and
+[NOTICE](NOTICE).
+
+LitJev `full-v3.1` 是 [Qwen/Qwen3.5-4B](https://www.modelscope.cn/models/Qwen/Qwen3.5-4B)
+（Apache License 2.0）的微调衍生版本，**全部模型权重在训练中已被修改**（Apache-2.0
+第 4(b) 条修改声明）。新增代码与 head 权重使用 MIT License。详见 [LICENSE](LICENSE)、
+[LICENSE-base](LICENSE-base) 与 [NOTICE](NOTICE)。

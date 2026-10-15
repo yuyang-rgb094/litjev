@@ -1,0 +1,16 @@
+LitJev v3.1
+Copyright (c) 2026 LitJev contributors
+
+This product includes model weights derived from Qwen/Qwen3.5-4B
+(https://www.modelscope.cn/models/Qwen/Qwen3.5-4B), Copyright (c) Alibaba Cloud.
+Qwen/Qwen3.5-4B is licensed under the Apache License, Version 2.0.
+
+LitJev v3.1 is a fine-tuned derivative of Qwen/Qwen3.5-4B. All model weights,
+including the decoder trunk, were modified during supervised fine-tuning on the
+LitJev pair dataset (modification notice required by Apache-2.0 section 4(b)).
+
+Our added code and head weights (inference.py, head_final.pt, training and
+evaluation scripts) are released under the MIT License.
+
+The full text of the Apache License 2.0 is reproduced in LICENSE-base.
+The full text of the MIT License is in LICENSE.
