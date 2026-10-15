@@ -75,3 +75,18 @@ LitJev `full-v3.1` 是 [Qwen/Qwen3.5-4B](https://www.modelscope.cn/models/Qwen/Q
 （Apache License 2.0）的微调衍生版本，**全部模型权重在训练中已被修改**（Apache-2.0
 第 4(b) 条修改声明）。新增代码与 head 权重使用 MIT License。详见 [LICENSE](LICENSE)、
 [LICENSE-base](LICENSE-base) 与 [NOTICE](NOTICE)。
+
+## Download
+
+- Hugging Face: <https://huggingface.co/yuyang-rgb094/LitJev-v3.1>
+- ModelScope (mainland China): <https://www.modelscope.cn/models/yuyang094/LitJev-v3.1>
+
+```bash
+pip install -U modelscope
+modelscope download --model yuyang094/LitJev-v3.1 --local_dir ./model
+```
+
+```bash
+pip install -U "huggingface_hub[cli]"
+hf download yuyang-rgb094/LitJev-v3.1 --local-dir ./model
+```

@@ -337,7 +337,10 @@ GitHub Release 不适合发 7.9GB 权重，三个原因叠加：
    `Bad request for commit endpoint: Invalid file change`（数据其实已传完，只是
    commit 失败）。单文件要写全路径 `model/model-00001-of-00129.safetensors`，
    整目录用 `cd <dir> && hf upload REPO . .`（文件夹默认 PATH_IN_REPO 才是 `.`）。
-7. **本机 `cdn-lfs.huggingface.co` 解析失败/不可达**（系统 DNS 无应答，已知 IP 也
+7. **后台 nohup 的进程会被会话结束清掉**：第一次魔搭上传用 `nohup … &` 跑到 12%
+   就静默死掉（日志无报错）。长任务要在**前台会话里跑并保持轮询**，
+   或改用用户自己的终端。
+8. **本机 `cdn-lfs.huggingface.co` 解析失败/不可达**（系统 DNS 无应答，已知 IP 也
    连不通），而 `huggingface.co` 与 `cas-bridge.xethub.hf.co`（Xet）正常。所以走
    `hf upload`（Xet 路径）可行，`git push` + git-lfs 分片上传会卡在上传阶段。
 
@@ -358,8 +361,8 @@ GitHub Release 不适合发 7.9GB 权重，三个原因叠加：
 - [ ] **P0** 交叉验证基座原始 LICENSE：本机 `ssh dgx-spark` 被拒
       （`Permission denied (publickey)`），需在能 ssh spark 的终端执行；
       `release/check_base_license.sh` 的 `LITJEV_BASE_DIR` 仍待按结果修正
-- [ ] **P1** 魔搭建仓 `<org>/LitJev-v3.1`，上传到仓库根：权重 + `LICENSE` +
-      `LICENSE-base` + `NOTICE` + `README.md`（需 ModelScope 令牌；主渠道）
+- [x] **P1** 魔搭建仓并上传：<https://www.modelscope.cn/models/yuyang094/LitJev-v3.1>
+      —— 权重在仓库根，143 个文件 sha256 与本地全部一致，抽样下载校验通过（见 §9.8.5）
 - [ ] **P2** 可选：把 129 个分片合并为 4–8 个 ~1GB（需重传全量）；可选再发
       int4 量化版（~2GB）
 - [ ] **P2** 让同事从魔搭重下一次，确认不再断
@@ -422,3 +425,18 @@ Bad request for commit endpoint: Invalid file change
 - 权重**没有**进 git 树（本地的 `15ea626` 权重指针提交未推送）
 - `v3.1` Release 说明加顶部提示，引导到 HF；资产保留为历史渠道
 - 仓库 homepage 指向 HF 模型仓库
+
+## 9.8.5 魔搭 ModelScope（2026-10-15 完成）
+
+- 仓库：<https://www.modelscope.cn/models/yuyang094/LitJev-v3.1>（public，License 填 Apache License 2.0，中文名「LitJev 学术文献判断模型」）
+- 内容：权重 137 个文件 + `LICENSE` / `LICENSE-base` / `NOTICE` / `MODEL_CARD.md` /
+  `inference.py` / `README.md`（模型卡），全部在**仓库根**
+- 校验：远端 `Sha256` 与本地逐字节比对 **143/143 一致，0 mismatch**；
+  另用 `modelscope download` 实拉 `model-00129-of-00129.safetensors` + `head_final.pt`，
+  `shasum -a 256 -c SHA256SUMS` 通过 —— 同事路径可用
+- 客户端：`modelscope` 1.37.1，装在系统 Python 3.9 用户目录
+  （`~/Library/Python/3.9/bin/modelscope`）；登录凭据在 `~/.modelscope/credentials`，
+  之后上传/下载都不需要再提供令牌
+- 上传行为：`upload_folder` 分批提交（137 文件 → 3 批 × 64），**中途远端一直只有 1 个文件**，
+  别误判卡死；判断进度用 `lsof -p <pid>` 看当前还开着哪几个分片
+- 遗留：本地上传缓存 `~/litjev_repo_tmp/model/.ms_upload_cache`（不会上传，可留可删）

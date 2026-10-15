@@ -21,8 +21,8 @@ set -euo pipefail
 TAG="${LITJEV_TAG:-v3.1}"
 DEST="${1:-./model}"
 SOURCE="${LITJEV_SOURCE:-auto}"
-MODELSCOPE_ID="${LITJEV_MODELSCOPE_ID:-}"
-HF_ID="${LITJEV_HF_ID:-yuyang-rgb094/LitJev-v3.1}"
+MODELSCOPE_ID="${LITJEV_MODELSCOPE_ID:-yuyang094/LitJev-v3.1}"
+HF_ID="${LITJEV_HF_ID:-}"
 GH_REPO="${LITJEV_REPO:-yuyang-rgb094/litjev}"
 
 mkdir -p "$DEST"

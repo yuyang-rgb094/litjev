@@ -42,7 +42,7 @@ The full `full-v3.1` weights are published as a model repository (the Git tree
 itself does not store the multi-GB weights):
 
 - Hugging Face: <https://huggingface.co/yuyang-rgb094/LitJev-v3.1>
-- ModelScope: coming soon (intended primary channel for mainland China)
+- ModelScope: <https://www.modelscope.cn/models/yuyang094/LitJev-v3.1> (primary channel for mainland China)
 
 ```bash
 bash download_model.sh ./model
@@ -107,7 +107,7 @@ LitJev 将论文标题和摘要映射为 12 个类型化判断，每个判断独
 完整 `full-v3.1` 权重以模型仓库形式发布（不放入 Git 提交历史）：
 
 - Hugging Face：<https://huggingface.co/yuyang-rgb094/LitJev-v3.1>
-- 魔搭 ModelScope：建设中（计划的国内主渠道）
+- 魔搭 ModelScope：<https://www.modelscope.cn/models/yuyang094/LitJev-v3.1>（国内主渠道）
 
 ```bash
 bash download_model.sh ./model
