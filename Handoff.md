@@ -423,7 +423,8 @@ Bad request for commit endpoint: Invalid file change
   `MODEL_CARD.md`（+License 段）、多通道 `download_model.sh`（已填 HF id）、
   `Handoff.md`、`model/SHA256SUMS`（校验用）
 - 权重**没有**进 git 树（本地的 `15ea626` 权重指针提交未推送）
-- `v3.1` Release 说明加顶部提示，引导到 HF；资产保留为历史渠道
+- `v3.1` Release 说明顶部提示引导到 **魔搭 + Hugging Face 双渠道**（2026-10-15 更新）；
+  资产保留为历史渠道；仓库 homepage/description 也带上两个模型仓库链接
 - 仓库 homepage 指向 HF 模型仓库
 
 ## 9.8.5 魔搭 ModelScope（2026-10-15 完成）
