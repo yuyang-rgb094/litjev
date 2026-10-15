@@ -12,5 +12,9 @@ LitJev pair dataset (modification notice required by Apache-2.0 section 4(b)).
 Our added code and head weights (inference.py, head_final.pt, training and
 evaluation scripts) are released under the MIT License.
 
-The full text of the Apache License 2.0 is reproduced in LICENSE-base.
+The base model snapshot ships no NOTICE file, so Apache-2.0 section 4(d) adds no
+further obligations beyond the attribution above.
+
+The full text of the Apache License 2.0 is reproduced in LICENSE-base, copied
+verbatim from the base snapshot (it carries the line `Copyright 2026 Alibaba Cloud`).
 The full text of the MIT License is in LICENSE.

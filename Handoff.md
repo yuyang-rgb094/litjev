@@ -295,13 +295,14 @@ GitHub Release 不适合发 7.9GB 权重，三个原因叠加：
 |---|---|---|
 | `PUBLISH_GUIDE.md` | 渠道评估、上传步骤、§5 许可证义务与物料说明 | 完成 |
 | `download_model.sh` | 替换版下载脚本：魔搭 → HF → GitHub 兜底，带重试 + SHA256 校验 | 完成，待替换进仓库 |
-| `LICENSE-base` | Apache-2.0 全文（201 行含 APPENDIX，sha256 `c71d239d…`） | 完成 |
+| `LICENSE-base` | 基座快照原文（Apache-2.0 全文，含 `Copyright 2026 Alibaba Cloud`，sha256 `50cbab8a…`） | 完成 |
 | `NOTICE` | 归属声明 + §4b「全部权重已修改」 | 完成 |
 | `apply_repo_license.sh` | 一键落库：拷许可文件 + 改 README 中英文许可段 + MODEL_CARD 追加 License 段；留 `.bak`、幂等 | 完成，dry-run 已对真仓库验证 |
 | `check_base_license.sh` | 基座许可证核查脚本 | 完成，但默认路径需按 §9.5-2 修正 |
 
-`LICENSE-base` 取自本机 ark-cli 自带的正本（非手抄），可用
-`shasum -a 256 release/LICENSE-base` 复核。
+`LICENSE-base` 于 2026-10-15 从基座快照原文
+（`dgx-spark:~/litjev/models/models/Qwen--Qwen3.5-4B/snapshots/master/LICENSE`）逐字节拷贝，
+sha256 `50cbab8a…`；基座快照**没有** NOTICE 文件。
 
 ## 9.5 环境坑（下次会话必读）
 
@@ -340,6 +341,10 @@ GitHub Release 不适合发 7.9GB 权重，三个原因叠加：
 7. **后台 nohup 的进程会被会话结束清掉**：第一次魔搭上传用 `nohup … &` 跑到 12%
    就静默死掉（日志无报错）。长任务要在**前台会话里跑并保持轮询**，
    或改用用户自己的终端。
+9. **`dgx-spark` 免密已修好（2026-10-15）**：`vivolight@192.168.50.243:22` 一直可达，但本机
+   `~/.ssh/id_ed25519`（当天重新生成过）不在 spark 的 `authorized_keys` 里，所以
+   `ssh dgx-spark` 报 `Permission denied (publickey)`。用 `SSH_ASKPASS` + 密码登录后追加公钥
+   （现 2 行），免密可用。基座模型：宿主 `~/litjev/models/models/`，容器内 `/litjev/models/models/`。
 8. **本机 `cdn-lfs.huggingface.co` 解析失败/不可达**（系统 DNS 无应答，已知 IP 也
    连不通），而 `huggingface.co` 与 `cas-bridge.xethub.hf.co`（Xet）正常。所以走
    `hf upload`（Xet 路径）可行，`git push` + git-lfs 分片上传会卡在上传阶段。
@@ -358,13 +363,13 @@ GitHub Release 不适合发 7.9GB 权重，三个原因叠加：
       弃用提示、仓库 homepage 指向 HF
 - [x] **P2** README 下载段落改指向 HF、GitHub Release 标「历史渠道，不推荐」
       （MODEL_CARD.md 无下载段，无需改）
-- [ ] **P0** 交叉验证基座原始 LICENSE：本机 `ssh dgx-spark` 被拒
-      （`Permission denied (publickey)`），需在能 ssh spark 的终端执行；
-      `release/check_base_license.sh` 的 `LITJEV_BASE_DIR` 仍待按结果修正
+- [x] **P0** 基座许可证**已逐字核实**：spark 上
+      `~/litjev/models/models/Qwen--Qwen3.5-4B/snapshots/master/LICENSE` = Apache-2.0 全文
+      （11,343 B，sha256 `50cbab8a…`，含 `Copyright 2026 Alibaba Cloud`），已逐字节替换
+      `release/LICENSE-base` 与仓库副本，并同步到 HF/魔搭；基座无 NOTICE 文件（§4d 无额外义务）
 - [x] **P1** 魔搭建仓并上传：<https://www.modelscope.cn/models/yuyang094/LitJev-v3.1>
       —— 权重在仓库根，143 个文件 sha256 与本地全部一致，抽样下载校验通过（见 §9.8.5）
-- [ ] **P2** 可选：把 129 个分片合并为 4–8 个 ~1GB（需重传全量）；可选再发
-      int4 量化版（~2GB）
+- [x] **P2** ~~分片合并为 4–8 个 ~1GB / 再发 int4 量化版~~：**不做**（4B 已足够小，收益不足）
 - [ ] **P2** 让同事从魔搭重下一次，确认不再断
 
 ## 9.7 阻塞与需要人工提供
@@ -441,3 +446,35 @@ Bad request for commit endpoint: Invalid file change
 - 上传行为：`upload_folder` 分批提交（137 文件 → 3 批 × 64），**中途远端一直只有 1 个文件**，
   别误判卡死；判断进度用 `lsof -p <pid>` 看当前还开着哪几个分片
 - 遗留：本地上传缓存 `~/litjev_repo_tmp/model/.ms_upload_cache`（不会上传，可留可删）
+
+## 9.8.6 收尾（2026-10-15）
+
+- 分片合并 / int4 量化：**不做**（4B 模型本身已很小，收益不足）
+- 临时产物已清理：`~/litjev_dl_verify/`、`~/litjev_ms_verify/`、`~/litjev_upload.log`、
+  `~/litjev_ms_upload.log`、`~/litjev_ms_upload.py`、`~/litjev_ms_README.md`、
+  `model/.ms_upload_cache` 及 `/tmp` 下的中间文件
+- 保留：`~/.modelscope/credentials`（魔搭登录凭据）、`~/.cache/huggingface/token`（HF 凭据）、
+  用户目录下的 `modelscope` 客户端（后续下载/校验要用）
+- 基座 LICENSE 待办关闭：结论以魔搭注册表 API 为准（本机 ssh spark 无权限，未逐字读取）
+
+## 9.8.7 dgx-spark 现状快照（2026-10-15 深夜）
+
+SSH：`ssh dgx-spark` 免密可用（本次修复，见 §9.5-9）。
+
+| 项 | 值 |
+|---|---|
+| 主机 | `spark-2f58`，Ubuntu 24.04.3 LTS，kernel `6.11.0-1014-nvidia`，aarch64（DGX GB10） |
+| 运行 | up 16 天 10:19，load 0.16 |
+| CPU / 内存 | 20 核；121 GiB 总 / 3.2 GiB 已用（118 GiB 可用），无 swap |
+| GPU | NVIDIA GB10，利用率 5%，42℃ |
+| 磁盘 | `/` 3.7T，已用 1.4T（38%），余 2.2T |
+| 容器 | `litjev-train` Up 2 weeks（`vllm/vllm-openai:latest`，mem_limit=100 GiB，挂载 `~/litjev -> /litjev`）；容器内无训练进程 |
+| 占用 | `m2-train` 943G、`models` 8.8G、`pylibs` 5.5G、`m1-pipeline` 1.3G、`venv` 470M |
+
+⚠️ **§3.2 里的两个后台循环实际都已停**：host 上无 python 进程（只剩 Sep 30 的 zombie）、
+无 tmux/screen 会话，`m1-pipeline/data` 最新文件停在 **Sep 30 21:21**。是否重启需先决策
+（keyed drip 的收益此前已在下降）。
+
+基座快照复核：`.../Qwen--Qwen3.5-4B/snapshots/master/` 含 `LICENSE`(Apache-2.0, 11,343 B)、
+`README.md`(77 KB)、`config.json`(`Qwen3_5ForConditionalGeneration` / `model_type=qwen3_5`)、
+两个 safetensors（5.33 GB + 3.99 GB），**无 NOTICE**。
