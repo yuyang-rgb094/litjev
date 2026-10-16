@@ -34,6 +34,8 @@ bash download_model.sh ./model
 - `MODEL_POSITIONING_AND_EVALUATION.md`：模型定位与能力评估
 - `DATA_EXPANSION_PLAN.md`：数据扩充方案
 - `NEXT_TRAINING_GUIDE.md`：后续训练指引
+- `PIPELINE_AND_TRAINING.md`：数据/蒸馏/训练全流程复盘（2026-10-16；仅本地与 spark，未公开）
+- `M2_TRAIN_DISK_AUDIT.md`：`m2-train` 磁盘审计与可删清单（同上，未公开）
 - `paper/`：论文 md/tex 与审查
 - `LitJve.png`：Logo
 
@@ -371,14 +373,27 @@ sha256 `50cbab8a…`；基座快照**没有** NOTICE 文件。
       —— 权重在仓库根，143 个文件 sha256 与本地全部一致，抽样下载校验通过（见 §9.8.5）
 - [x] **P2** ~~分片合并为 4–8 个 ~1GB / 再发 int4 量化版~~：**不做**（4B 已足够小，收益不足）
 - [ ] **P2** 让同事从魔搭重下一次，确认不再断
+- [x] **P2** `m2-train` 瘦身：方案 A+B 全删，**943G → 19G**（旧世代 `full-v1/v2/v3`、
+      四个冒烟 run、v3.1 的 4 个 ckpt；小文件留档 `m2-train/keep/`）。C 档
+      （`release/` 7.9G + 老 `data_pairs` ~1G）未做
 
-## 9.7 阻塞与需要人工提供
+## 9.7 阻塞与需要人工提供（2026-10-16 更新）
 
-- **网络**：上传与 SSH 需在**新 Codex 会话**（沙箱带网）或用户自己的终端执行
-- **凭证**：ModelScope SDK 令牌、Hugging Face token、目标命名空间
-- **写权限**：`~/.codex/`、`~/litjev_repo_tmp/` 均不在 agent 可写根内
-  （仅项目目录 `claw search/litjev/` 与临时目录可写），相关写入必须由用户执行；
-  脚本已备好，各是一条命令
+- **GitHub 推送待网络**：本地 `gh-dist` 上的 `099c69b`（本次 Handoff 记录）尚未推送。
+  2026-10-16 深夜 `github.com:443` 从这台 Mac 连不通（`Couldn't connect to server` /
+  `Empty reply from server`，间隔 4 分钟重试仍失败），而同时段 `huggingface.co` 与
+  `dgx-spark` 都正常。恢复后执行：
+
+  ```bash
+  git -C ~/litjev_repo_tmp -c credential.helper='!gh auth git-credential' \
+    push https://github.com/yuyang-rgb094/litjev.git gh-dist:main
+  ```
+
+- **需要你决策**：① spark 上两个后台循环是否重启；② C 档清理是否执行（≈9G）；
+  ③ `m2-train/keep/` 108M 留档是否保留
+- **人工动作**：让同事从魔搭实拉一次做体验验收
+- **凭据现状**：`gh`（macOS keyring）、HF token（`~/.cache/huggingface/token`）、
+  魔搭（`~/.modelscope/credentials`）；早前贴在对话里的明文 token 已失效，建议确认吊销
 
 ---
 
@@ -478,3 +493,71 @@ SSH：`ssh dgx-spark` 免密可用（本次修复，见 §9.5-9）。
 基座快照复核：`.../Qwen--Qwen3.5-4B/snapshots/master/` 含 `LICENSE`(Apache-2.0, 11,343 B)、
 `README.md`(77 KB)、`config.json`(`Qwen3_5ForConditionalGeneration` / `model_type=qwen3_5`)、
 两个 safetensors（5.33 GB + 3.99 GB），**无 NOTICE**。
+
+## 9.8.8 磁盘与文档收尾（2026-10-16）
+
+- **`m2-train` 清理（方案 A+B 全删）**：943G → **19G**
+  - 删除：`runs/full-v1`(55G)、`runs/full-v2`(337G)、`runs/full-v3`(408G)、
+    `runs/{smoke,speed,bs64,v3-smoke}`(各 7.9G)、`runs/full-v3.1/ckpt_step{9000,9500,10000,10500}`(95G)
+  - 留档：`m2-train/keep/{full-v1,full-v2,full-v3}/`（各 run 的 `head_final.pt`、`base_sft/config.json`、
+    `preds_*.jsonl`、训练日志，合计 108M）
+  - 保留：`runs/full-v3.1/{base_sft,head_final.pt,metrics.json,preds_valid.jsonl,preds_test.jsonl}`、
+    `data_pairs_v3.1.jsonl`、全部脚本与报告
+  - ⚠️ 坑：这些目录属主是 **root**（容器内创建），宿主 `vivolight` **删不掉**，
+    要用 `docker exec litjev-train sh -c 'rm -rf /litjev/m2-train/...'`
+  - 效果：整机 `/` 从 1.4T 用到 **410G（12%）**，余量 3.1T
+- **新增两份本地文档**（未公开、未进仓库）：
+  - `PIPELINE_AND_TRAINING.md`：语料获取（OpenAlex 三通道 + KML 管线）、
+    蒸馏（`distill_craft.py` 5-persona 投票 → 软标签 jsonl）、样本与 pairs、训练与评测、
+    导出发布、一页复现清单、已知限制
+  - `M2_TRAIN_DISK_AUDIT.md`：本次清理的依据与 dry-run 脚本
+  - 两份都已同步到 `dgx-spark:~/litjev/`
+
+---
+
+# 9.9 下次开工清单（2026-10-16 收尾）
+
+## 9.9.1 一句话状态
+
+v3.1 已在 **魔搭 + Hugging Face + GitHub** 三处发布并校验一致；`dgx-spark` 免密可用、
+`m2-train` 从 943G 瘦到 **19G**；训练与数据管线**全部停止**（数据停在 9-30）；
+本地新增两份流程文档（未公开）。
+
+## 9.9.2 三处入口与校验
+
+| 位置 | 地址 | 校验 |
+|---|---|---|
+| 魔搭（主渠道） | <https://www.modelscope.cn/models/yuyang094/LitJev-v3.1> | 143 文件 / 8.43 GB；sha256 **143/143 一致**；抽样 `modelscope download` 校验通过 |
+| Hugging Face | <https://huggingface.co/yuyang-rgb094/LitJev-v3.1> | 144 文件；131 个 LFS 文件 sha256 一致 + 全量 size 一致；抽样下载校验通过 |
+| GitHub | <https://github.com/yuyang-rgb094/litjev> | 远端 main `a90935e`；本地 `gh-dist` `099c69b`（待推送）。`LICENSE-base` = 基座原文 `50cbab8a…` |
+
+## 9.9.3 待办（按优先级）
+
+| 优先级 | 事项 | 动作 |
+|---|---|---|
+| **P0** | 推送待推提交 | `gh-dist` → GitHub main（命令见 §9.7） |
+| **P1** | 同事从魔搭实拉验收 | `modelscope download --model yuyang094/LitJev-v3.1 --local_dir ./model` |
+| **P1** | 决定 spark 后台循环是否重启 | keyed OpenAlex 匹配 + `oa_enrich`/samples 重建；已停 2 周，且 keyed 命中率此前已在下降 → 先评估增益再投预算 |
+| P2 | 可选 C 档清理（≈9G） | 删 `m2-train/release/litjev-model/`(7.9G)、`data_pairs.jsonl`(767M)、`data_pairs_v1.jsonl.bak`(255M) |
+| P2 | `m2-train/keep/` 108M 留档 | 保留 v1/v2/v3 的 `head_final.pt`/`config.json`/`preds`/日志以便追溯；不想留可删 |
+| P3 | 论文修订 | 见 §6 与 `PAPER_OUTLINE.md`（保留 GLM 对比、写清限制） |
+
+## 9.9.4 下次第一条命令（自检）
+
+```bash
+cd "/Users/yangyu/Documents/Documents - yang’s Mac mini/claw search/litjev"
+git -C ~/litjev_repo_tmp log --oneline -3 gh-dist          # 看是否还有未推送提交
+ssh dgx-spark 'df -h / | tail -1; du -sh ~/litjev/m2-train; ls ~/litjev/m2-train/runs'
+```
+
+## 9.9.5 必读的坑（浓缩）
+
+1. spark 上 `runs/**` 属主是 **root**，宿主 `vivolight` 删不掉 → 用
+   `docker exec litjev-train sh -c 'rm -rf /litjev/...'`
+2. `/litjev/...` 是**容器内**路径；宿主路径是 `~/litjev/...`
+3. 长任务别用 `nohup … &`（会被会话清理杀掉，日志里没有报错）
+4. `hf upload` 单文件时第 3 个参数是**文件名**，不是目录前缀；整目录用 `cd <dir> && hf upload REPO . .`
+5. 本机 `cdn-lfs.huggingface.co` 不通 → 走 `hf upload`（Xet），别用 `git push` 传大权重
+6. `github.com` 从这台 Mac 偶发连不通（HF/魔搭/spark 正常）→ 重试即可
+7. 用受管检索（豆包搜索/dataPro/OpenViking/Supabase）前先提交 RoutePlan
+8. 详细版见 §9.5（1–9 条）
